@@ -75,5 +75,5 @@ pub static MIGRATIONS: Lazy<Migrations> = Lazy::new(|| {
 
 #[test]
 fn migrations_test() {
-    assert!(MIGRATIONS.validate().is_ok());
+    assert_eq!(MIGRATIONS.validate(), Ok(()));
 }

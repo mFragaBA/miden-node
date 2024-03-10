@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use miden_node_proto::{
     convert,
-    errors::ParseError,
+    errors::ConversionError,
     generated::{
         self,
         note::NoteSyncRecord,
@@ -23,7 +23,9 @@ use miden_node_proto::{
     },
     AccountState,
 };
-use miden_objects::{crypto::hash::rpo::RpoDigest, BlockHeader, Felt, ZERO};
+use miden_objects::{
+    crypto::hash::rpo::RpoDigest, transaction::AccountDetails, BlockHeader, Felt, ZERO,
+};
 use tonic::{Response, Status};
 use tracing::{debug, info, instrument};
 
@@ -185,7 +187,7 @@ impl api_server::Api for StoreApi {
             .block
             .ok_or(invalid_argument("Apply block missing block header"))?
             .try_into()
-            .map_err(|err: ParseError| Status::invalid_argument(err.to_string()))?;
+            .map_err(|err: ConversionError| Status::invalid_argument(err.to_string()))?;
 
         info!(target: COMPONENT, block_num = block_header.block_num(), block_hash = %block_header.hash());
 
@@ -194,11 +196,16 @@ impl api_server::Api for StoreApi {
             .accounts
             .into_iter()
             .map(|account_update| {
+                let account_details: Option<AccountDetails> =
+                    account_update.details.as_ref().map(TryInto::try_into).transpose().map_err(
+                        |err: ConversionError| Status::invalid_argument(err.to_string()),
+                    )?;
                 let account_state: AccountState = account_update
                     .try_into()
-                    .map_err(|err: ParseError| Status::invalid_argument(err.to_string()))?;
+                    .map_err(|err: ConversionError| Status::invalid_argument(err.to_string()))?;
                 Ok((
                     account_state.account_id.into(),
+                    // account_state.details,
                     account_state
                         .account_hash
                         .ok_or(invalid_argument("Account update missing account hash"))?,
@@ -216,7 +223,9 @@ impl api_server::Api for StoreApi {
                         .note_id
                         .ok_or(invalid_argument("Note missing id"))?
                         .try_into()
-                        .map_err(|err: ParseError| Status::invalid_argument(err.to_string()))?,
+                        .map_err(|err: ConversionError| {
+                            Status::invalid_argument(err.to_string())
+                        })?,
                     sender: note.sender.ok_or(invalid_argument("Note missing sender"))?.into(),
                     tag: note.tag,
                 })
@@ -401,6 +410,6 @@ fn validate_nullifiers(nullifiers: &[generated::digest::Digest]) -> Result<Vec<R
     nullifiers
         .iter()
         .map(TryInto::try_into)
-        .collect::<Result<_, ParseError>>()
+        .collect::<Result<_, ConversionError>>()
         .map_err(|_| invalid_argument("Digest field is not in the modulus range"))
 }

@@ -504,7 +504,7 @@ pub fn build_notes_tree(
                 .try_into()
                 .expect("tag value is greater than or equal to the field modulus"),
         );
-        let index = note.note_index as u64;
+        let index = (note.note_index as u64) * 2;
         entries.push((index, note.note_id.into()));
         entries.push((index + 1, note_metadata.into()));
     }
